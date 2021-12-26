@@ -29,31 +29,43 @@ plt.ion()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
-
+# memory object
 class ReplayMemory(object):
 
+    # Initialized at 10,000 later
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
 
+    # *args unpacks all iterable aguments
+    # Save a transition
     def push(self, *args):
-        """Save a transition"""
         self.memory.append(Transition(*args))
 
+    # simple enough
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
+    # curently occupied
     def __len__(self):
         return len(self.memory)
 
-
+# Deep Queue Network
+# nn.Module is the base class for all pytorch models
 class DQN(nn.Module):
 
     def __init__(self, h, w, outputs):
+        # Initialize the NN module - What does DQN do here?
         super(DQN, self).__init__()
+
+        # 3: 
+        # 16: 
+        # Kernel Size: 5x5 pixel squares
+        # Stride: differences between each kernel
         self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
+
+        # Num Features: 16
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -64,13 +76,19 @@ class DQN(nn.Module):
         # and therefore the input image size, so compute it.
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - (kernel_size - 1) - 1) // stride + 1
+
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
         linear_input_size = convw * convh * 32
+
+        # Linear transformation 
+        # linear_input_size: size of input samples (pixel count)
+        # outputs: size of output samples (action state space)
         self.head = nn.Linear(linear_input_size, outputs)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
+    # effectively the classifier of state -> action
     def forward(self, x):
         x = x.to(device)
         x = F.relu(self.bn1(self.conv1(x)))
@@ -78,11 +96,7 @@ class DQN(nn.Module):
         x = F.relu(self.bn3(self.conv3(x)))
         return self.head(x.view(x.size(0), -1))
 
-
-resize = T.Compose([T.ToPILImage(),
-                    T.Resize(40, interpolation=Image.CUBIC),
-                    T.ToTensor()])
-
+resize = T.Compose([T.ToPILImage(), T.Resize(40, interpolation=Image.CUBIC), T.ToTensor()])
 
 def get_cart_location(screen_width):
     world_width = env.x_threshold * 2

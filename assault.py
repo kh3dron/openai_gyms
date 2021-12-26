@@ -1,6 +1,6 @@
 import gym
 
-env = gym.make("Assault-v0")
+env = gym.make("Ant-v2")
 for i_episode in range(40): #games to play
     observation = env.reset()
     for t in range(100): #moves to make each game last
