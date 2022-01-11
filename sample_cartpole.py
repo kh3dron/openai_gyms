@@ -14,7 +14,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-import time
 
 env = gym.make('CartPole-v0').unwrapped
 
@@ -22,49 +21,36 @@ env = gym.make('CartPole-v0').unwrapped
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
+
 plt.ion()
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
 
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
 
-# memory object
+
 class ReplayMemory(object):
 
-    # Initialized at 10,000 later
     def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
+        self.memory = deque([],maxlen=capacity)
 
-    # *args unpacks all iterable aguments
-    # Save a transition
     def push(self, *args):
+        """Save a transition"""
         self.memory.append(Transition(*args))
 
-    # simple enough
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
-    # curently occupied
     def __len__(self):
         return len(self.memory)
 
-# Deep Queue Network
-# nn.Module is the base class for all pytorch models
 class DQN(nn.Module):
-
+    
     def __init__(self, h, w, outputs):
-        # Initialize the NN module - What does DQN do here?
         super(DQN, self).__init__()
-
-        # 3: 
-        # 16: 
-        # Kernel Size: 5x5 pixel squares
-        # Stride: differences between each kernel
         self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
-
-        # Num Features: 16
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -73,21 +59,15 @@ class DQN(nn.Module):
 
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
-        def conv2d_size_out(size, kernel_size=5, stride=2):
-            return (size - (kernel_size - 1) - 1) // stride + 1
-
+        def conv2d_size_out(size, kernel_size = 5, stride = 2):
+            return (size - (kernel_size - 1) - 1) // stride  + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
         linear_input_size = convw * convh * 32
-
-        # Linear transformation 
-        # linear_input_size: size of input samples (pixel count)
-        # outputs: size of output samples (action state space)
         self.head = nn.Linear(linear_input_size, outputs)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    # effectively the classifier of state -> action
     def forward(self, x):
         x = x.to(device)
         x = F.relu(self.bn1(self.conv1(x)))
@@ -95,13 +75,15 @@ class DQN(nn.Module):
         x = F.relu(self.bn3(self.conv3(x)))
         return self.head(x.view(x.size(0), -1))
 
-resize = T.Compose([T.ToPILImage(), T.Resize(40, interpolation=Image.CUBIC), T.ToTensor()])
+resize = T.Compose([T.ToPILImage(),
+                    T.Resize(40, interpolation=Image.CUBIC),
+                    T.ToTensor()])
+
 
 def get_cart_location(screen_width):
     world_width = env.x_threshold * 2
     scale = screen_width / world_width
     return int(env.state[0] * scale + screen_width / 2.0)  # MIDDLE OF CART
-
 
 def get_screen():
     # Returned screen requested by gym is 400x600x3, but is sometimes larger
@@ -130,13 +112,11 @@ def get_screen():
 
 
 env.reset()
-'''
 plt.figure()
 plt.imshow(get_screen().cpu().squeeze(0).permute(1, 2, 0).numpy(),
            interpolation='none')
 plt.title('Example extracted screen')
 plt.show()
-'''
 
 BATCH_SIZE = 128
 GAMMA = 0.999
@@ -204,17 +184,6 @@ def plot_durations():
         display.clear_output(wait=True)
         display.display(plt.gcf())
 
-def print_durations(n):
-    last = episode_durations[-1]
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    if len(durations_t) >= 100:
-        last100 = sum(episode_durations[-100:])/100
-        s = "Episode: " + str(n) + ", Latest duration: "+ str(last) + ", Average of last 100 durations: " + str(last100)
-    else:
-        s = "Episode: " + str(n) + ", Latest duration: "+ str(last)
-    print(s)
-    return
-
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
@@ -227,9 +196,9 @@ def optimize_model():
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=device, dtype=torch.bool)
+                                          batch.next_state)), device=device, dtype=torch.bool)
     non_final_next_states = torch.cat([s for s in batch.next_state
-                                       if s is not None])
+                                                if s is not None])
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
@@ -245,15 +214,13 @@ def optimize_model():
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(
-        non_final_next_states).max(1)[0].detach()
+    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values,
-                     expected_state_action_values.unsqueeze(1))
+    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Optimize the model
     optimizer.zero_grad()
@@ -262,8 +229,7 @@ def optimize_model():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-
-num_episodes = 200
+num_episodes = 50
 for i_episode in range(num_episodes):
     # Initialize the environment and state
     env.reset()
@@ -294,7 +260,7 @@ for i_episode in range(num_episodes):
         optimize_model()
         if done:
             episode_durations.append(t + 1)
-            print_durations(i_episode)
+            plot_durations()
             break
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
